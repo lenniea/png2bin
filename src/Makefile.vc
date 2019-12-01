@@ -1,0 +1,8 @@
+CFLAGS = -MT -Wall -I ..\lpng1611
+LIBPNG = ..\..\lpng1637
+LIBDIR = $(LIBPNG)\Projects\Vstudio\Release Library
+
+all : png2bin.exe
+
+png2bin.exe : png2bin.C
+    $(CC) $(CFLAGS) -I$(LIBPNG) png2bin.c "$(LIBDIR)\libpng16.lib" "$(LIBDIR)\zlib.lib" -o png2bin.exe

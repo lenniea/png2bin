@@ -12,20 +12,16 @@
 const char HELP[] =
 	"Usage: png2bin [OPTION] FILE\n"
 	"Options:\n"
-	"  -r##       Outputs rotated image clockwise (0,90,180,270)\n"
 	"  -o <file>  Place the output into <file>\n"
 	;
 
 char DEFAULT_OUT[] = "out.bin";
 	
-void RotateBinImage(uint8_t **pimg, uint32_t *w, uint32_t *h, int rotate);
-
 //==================================================================================================
 int main(int argc, char *argv[]){
 	//--------------------------------------- Set Defaults -----------------------------------------
 	char *strInFile = NULL;
 	char *strOutFile = DEFAULT_OUT;
-	int rotate = 0;
 	
 	//-------------------------------------- Interpret args ----------------------------------------
 	int arg_idx = 1;
@@ -33,9 +29,6 @@ int main(int argc, char *argv[]){
 		if(argv[arg_idx][0] == '-'){
 			// is option
 			switch(argv[arg_idx][1]){
-				case 'r':
-					rotate = atoi(&argv[arg_idx][2]);
-					break;
 				case 'o':
 					arg_idx++;
 					
@@ -71,11 +64,6 @@ int main(int argc, char *argv[]){
 	//--------------------------------- Check for errors in args -----------------------------------
 	if(!strInFile){
 		printf("Error: No input file\n");
-		return(1);
-	}
-	
-	if((rotate != 0) && (rotate != 90) && (rotate != 180) && (rotate != 270)){
-		printf("Error: Invalid rotation\n");
 		return(1);
 	}
 	
