@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <png.h>
-#include <config.h>
+//#include <config.h>
 
 #define FATAL_ERROR(...) 	printf(__VA_ARGS__); retval = 1; goto ExitProgram
 
@@ -137,99 +137,62 @@ int main(int argc, char *argv[]){
 	uint8_t colortype;
 	colortype = png_get_color_type(png_ptr,info_ptr);
 	
-	if(!((bitdepth == 1) || (bitdepth == 8 && (colortype == PNG_COLOR_TYPE_RGB || colortype == PNG_COLOR_TYPE_RGB_ALPHA)))){
-		FATAL_ERROR("Error: Only monochrome or 24-bit RGB PNGs are supported:\n depth=%d\n type=%d\n",bitdepth,colortype);
+	printf("dimentions = %d x %d\n", width, height);
+	printf("bitdepth = %d  colortype=%d\n", bitdepth, colortype);
+
+	if(!((bitdepth == 8 && (colortype == PNG_COLOR_TYPE_RGB || colortype == PNG_COLOR_TYPE_RGB_ALPHA))
+	   || (bitdepth == 16))) {
+		FATAL_ERROR("Error: Only 8-bit, 16-bit or 24-bit RGB PNGs are supported:\n depth=%d\n type=%d\n", bitdepth, colortype);
 	}
 	
-	//printf("width = %d\n",width);
-	//printf("height = %d\n",height);
-	//printf("bitdepth = %d\n",bitdepth);
-	//printf("colortype = %d\n",colortype);
+	
+	uint8_t* png_row = NULL;
+	uint8_t bpp;
+	if (bitdepth == 16) {
+		bpp = 2;
+	} else if (colortype == PNG_COLOR_TYPE_RGB){
+		bpp = 3;
+	} else if (colortype == PNG_COLOR_TYPE_RGB_ALPHA){
+		bpp = 4;
+	}
+	png_row = malloc(width * bpp);
 	
 	// generate binary image into a massive array --------------------------------------------------
-	uint16_t wbyte, hbyte;
-	if(width%8){
-		wbyte = width/8+1;
-	}else{
-		wbyte = width/8;
-	}
-	hbyte = height;
+	uint16_t wbyte = width * bpp;
 	
-	img = malloc(wbyte*hbyte);
+	img = malloc(wbyte*height);
 	if(!img) {
 		FATAL_ERROR("malloc fail at line %d\n",__LINE__);
 	}
 	
-	if(bitdepth == 1){
-		uint32_t xb,y;
-		uint8_t mask;
-		uint8_t mod;
-		
-		mod = width%8;
-		if(mod){
-			mask = 0x80;
-			while(mod > 1){
-				mask |= (mask >>1);
-				mod--;
-			}
-		}else{
-			mask = 0xFF;
-		}
-		
-		for(y=0;y<height;y++){
-			png_read_row(png_ptr,img+wbyte*y,NULL);
-			for(xb=0;xb<wbyte;xb++){
-				img[wbyte*y+xb] = ~img[wbyte*y+xb];
-			}
-			img[wbyte*y+wbyte-1] &= mask;
-		}
-	}else{
-		uint8_t* png_row = NULL;
-		uint8_t bpp;
-		if(colortype == PNG_COLOR_TYPE_RGB){
-			bpp = 3;
-		}else if(colortype == PNG_COLOR_TYPE_RGB_ALPHA){
-			bpp = 4;
-		}
-		png_row = malloc(width * bpp);
-		
-		memset(img,0,wbyte*hbyte);
-		
-		uint32_t x,y;
-		size_t xb;
-		uint8_t mask;
-		for(y=0;y<height;y++){
-			png_read_row(png_ptr,png_row,NULL);
-			xb = 0;
-			mask = 0x80;
-			for(x=0;x<width;x++){
-				if((png_row[x*bpp] == 0x00)&&(png_row[x*bpp+1] == 0x00)&&(png_row[x*bpp+2] == 0x00)){ // equals black
-					// is dark
-					img[wbyte*y+xb] |= mask;
-				}else{
-					// is light
-					img[wbyte*y+xb] &= ~mask;
-				}
-				
-				mask >>= 1;
-				if(mask == 0){
-					mask = 0x80;
-					xb++;
-				}
+	memset(img,0,wbyte*height);
+	
+	uint32_t x,y;
+	size_t xb;
+	for (y=0; y<height; y++){
+		png_read_row(png_ptr,png_row,NULL);
+		xb = 0;
+		uint32_t index = 0;
+		uint32_t base = y * wbyte;
+		for (x=0; x<width; x++){
+			switch (bpp) {
+			case 4:
+				img[base + index] = png_row[index];
+				++index;
+			case 3:
+				img[base + index] = png_row[index];
+				++index;
+			case 2:
+				img[base+ index] = png_row[index];
+				++index;
+			default:
+				img[base + index] = png_row[index];
+				++index;
 			}
 		}
-		
-		if(png_row) free(png_row);
 	}
 	
-	// rotate image if necessary -------------------------------------------------------------------
-	RotateBinImage(&img,&width,&height,rotate);
-	if(width%8){
-		wbyte = width/8+1;
-	}else{
-		wbyte = width/8;
-	}
-	hbyte = height;
+	if(png_row) free(png_row);
 	
 	// Write output file ---------------------------------------------------------------------------
 	fileOut = fopen(strOutFile,"wb");
@@ -237,7 +200,8 @@ int main(int argc, char *argv[]){
 		FATAL_ERROR("Error: Could not create \"%s\"\n",strOutFile);
 	}
 	
-	fwrite(img,wbyte*hbyte,1,fileOut);
+	printf("writing %d x %d = %d bytes\n", wbyte, height, wbyte * height);
+	fwrite(img, wbyte*height, 1, fileOut);
 	
 	//------------------------------- Close all files, Free memory ---------------------------------
 	ExitProgram:
@@ -249,137 +213,3 @@ int main(int argc, char *argv[]){
 	
 	return(retval);
 }
-
-//==================================================================================================
-
-void RotateBinImage(uint8_t **pimg, uint32_t *w, uint32_t *h, int rotate){
-	uint16_t wbyte, hbyte;
-	uint16_t wbyte2, hbyte2;
-	uint32_t w2, h2;
-	uint8_t* img2 = NULL;
-	uint8_t* img = *pimg;
-	uint32_t rx,ry,wx,wy;
-	uint8_t rmask,wmask;
-	
-	// make a copy of img into img2
-	w2 = *w;
-	h2 = *h;
-	if(w2%8){
-		wbyte2 = w2/8+1;
-	}else{
-		wbyte2 = w2/8;
-	}
-	hbyte2 = h2;
-	img2 = malloc(wbyte2*hbyte2);
-	memcpy(img2,img,wbyte2*hbyte2);
-	
-	//temp:
-	wbyte = wbyte2;
-	hbyte = hbyte2;
-	
-	switch(rotate){
-		case 90:
-			*h = w2;
-			*w = h2;
-			
-			if(*w%8){
-				wbyte = *w/8+1;
-			}else{
-				wbyte = *w/8;
-			}
-			hbyte = *h;
-			
-			free(img);
-			img = malloc(wbyte*hbyte);
-			memset(img,0,wbyte*hbyte);
-			
-			for(rx=0,wy=0; rx<w2; rx++,wy++){
-				rmask = 0x80 >> (rx%8);
-				for(ry=0,wx=*w-1; ry<h2; ry++,wx--){
-					wmask = 0x80 >> (wx%8);
-					if(img2[wbyte2*ry+(rx/8)] & rmask){
-						img[wbyte*wy+(wx/8)] |= wmask;
-					}else{
-						img[wbyte*wy+(wx/8)] &= ~wmask;
-					}
-				}
-			}
-			break;
-		case 180:
-			wbyte = wbyte2;
-			hbyte = hbyte2;
-			memset(img,0,wbyte*hbyte);
-			
-			for(rx=0,wx=*w-1; rx<w2; rx++,wx--){
-				rmask = 0x80 >> (rx%8);
-				wmask = 0x80 >> (wx%8);
-				for(ry=0,wy=*h-1; ry<h2; ry++,wy--){
-					if(img2[wbyte2*ry+(rx/8)] & rmask){
-						img[wbyte*wy+(wx/8)] |= wmask;
-					}else{
-						img[wbyte*wy+(wx/8)] &= ~wmask;
-					}
-				}
-			}
-
-			break;
-		case 270:
-			*h = w2;
-			*w = h2;
-			
-			if(*w%8){
-				wbyte = *w/8+1;
-			}else{
-				wbyte = *w/8;
-			}
-			hbyte = *h;
-			free(img);
-			img = malloc(wbyte*hbyte);
-			memset(img,0,wbyte*hbyte);
-			
-			for(rx=0,wy=*h-1; rx<w2; rx++,wy--){
-				rmask = 0x80 >> (rx%8);
-				for(ry=0,wx=0; ry<h2; ry++,wx++){
-					wmask = 0x80 >> (wx%8);
-					if(img2[wbyte2*ry+(rx/8)] & rmask){
-						img[wbyte*wy+(wx/8)] |= wmask;
-					}else{
-						img[wbyte*wy+(wx/8)] &= ~wmask;
-					}
-				}
-			}
-			
-			
-			
-			break;
-	}
-	
-	if(img2) free(img2);
-	
-	*pimg = img;
-	
-	
-	#if 0 // disabled. only for debug
-	// print the image to the terminal:
-	int i;
-	int x,y;
-	
-	for(y=0;y<hbyte;y++){
-		for(x=0;x<wbyte;x++){
-			rmask = 0x80;
-			for(i=0;i<8;i++){
-				if(img[y*wbyte+x] & rmask){
-					printf("# ");
-				}else{
-					printf("  ");
-				}
-				rmask >>=1;
-			}
-		}
-		printf("\n");
-	}
-	#endif
-	
-}
-
-
