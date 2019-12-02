@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.10)
 # search for pkg-config
 include (FindPkgConfig)
 if (NOT PKG_CONFIG_FOUND)
