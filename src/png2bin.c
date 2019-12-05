@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <png.h>
+#include <libpng16/png.h>
 //#include <config.h>
 
 #define FATAL_ERROR(...) 	printf(__VA_ARGS__); retval = 1; goto ExitProgram
